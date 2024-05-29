@@ -1,0 +1,1 @@
+data.append(map_to_float(row))
