@@ -44,7 +44,7 @@ def read_params(pwm):
 
 def read_all():
     result = {}
-    pwms = [-130, -110, -90, -70, -50, 50, 70, 90, 110, 130, 250]
+    pwms = [-130, -110, -90, -70, -50, 50, 70, 90, 110, 130]
     for pwm in pwms: #get_filenames_and_pwm():
         data = read_params(pwm)
         result[pwm] = data
@@ -55,8 +55,8 @@ def plot_velocity(data):
         times = value[:,2] / 1000000.0        
         u = 12.0 * value[0, 1] / 255
         curve = integrate_curve(f_a, f_b, f_c, u, times)
-        pp.plot(times[:200], value[:, 4][:200], label=("%.1fV" % u))
-        pp.plot(times[:200], curve[:200])
+        pp.plot(times[:50], value[:, 4][:50], label=("%.1fV" % u))
+        pp.plot(times[:50], curve[:50])
     pp.legend()
     pp.xlabel("Time, s")
     pp.ylabel("Velocity, m/s")
@@ -71,6 +71,8 @@ def plot_set_velocity(data):
         set_vs[i, 1] = sum(velocities) / len(velocities)
 
     pp.plot(set_vs[:, 0], set_vs[:, 1], 'o')
+    pp.xlabel("Voltage, V")
+    pp.ylabel("Velocity, m/s")
     pp.grid(True)
     pp.show()
 
@@ -84,10 +86,10 @@ def fit_params(data):
     _b = 0.0
     _c = 0.0
     _error = float('inf')
-    for a in np.arange(11.2, 11.5, 0.01):
-        print("Fitting for a = %.5f; error = %.5f" % (a, _error))
-        for b in np.arange(0.5, 0.9, 0.01):
-            for c in np.arange(-1.5, -0.5, 0.05):
+    for a in np.arange(10.8, 11.8, 0.01):
+        print("Fitting for a = %.5f; error  %.5f" % (a, _error))
+        for b in np.arange(0.5, 0.7, 0.01):
+            for c in np.arange(-1.2, -0.8, 0.01):
                 error = 0.0
                 for item in data.values():
                     pwm = item[0, 1]
@@ -103,9 +105,9 @@ def fit_params(data):
 
 all_data = read_all()
 
-f_a = 11.43
+f_a = 11.28
 f_b = 0.69
-f_c = -1.05
+f_c = -1.06
 
 #print(fit_params(all_data))
 

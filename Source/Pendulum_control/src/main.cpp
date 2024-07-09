@@ -10,8 +10,8 @@
 #define REF_OUT_A 18 // PD3  - Khai báo chân A encoder của con lắc
 #define REF_OUT_B 19 // PD2  - Khai báo chân B encoder của con lắc
 
-#define SWITCH_RIGHT  21     // - Khai báo chân công tắc hành trình phải
-#define SWITCH_LEFT  20      // - Khai báo chân công tắc hành trình trái
+#define SWITCH_ON  8    
+#define SWITCH_OFF  9     
 
 #define MAX_STALL_U 50
 #define PPR  2400            // - Khai báo xung của encoder motor
@@ -22,9 +22,9 @@
 // #define B 0.7              // Bộ hệ số của công thức chuyển đổi lực - điện áp cấp vào động cơ
 // #define C -0.1
 
-#define A 11.43
+#define A 11.28
 #define B 0.69              // Bộ hệ số của công thức chuyển đổi lực - điện áp cấp vào động cơ
-#define C -0.9
+#define C -1.06
 
 #define Kx -10.00
 #define Kv -10.29 // Bộ tham số bộ điều khiển
@@ -37,7 +37,7 @@
 #define STATE_BALANCE   2        // Trạng thái thăng bằng
 #define STATE__STOP 3        // Trạng thái ngừng hẳn
 
-const float THETA_THRESHOLD = 10*(PI/180);        // Khai báo ngưỡng ~ 15 độ
+const float THETA_THRESHOLD = 12*(PI/180);        // Khai báo ngưỡng ~ 15 độ
 const float SU_THETA_THRESHOLD = 90*(PI/180); 
 const float PI2 = 2.0 * PI;                   // 360 độ
 
@@ -47,10 +47,6 @@ volatile long lastEncoded = 0L;
 volatile long refEncoderValue = 0;            // Khai báo biến encoder con lắc kiểu long
 volatile long lastRefEncoded = 0;
 
-volatile boolean leftSwitchPressed = 0;   // Biến nhấn công tắc trái
-volatile boolean rightSwitchPressed = 0;  // Biến nhấn công tắc phải
-volatile boolean leftPress = 0;
-volatile boolean rightPress = 0;
 
 unsigned long now = 0L;
 unsigned long lastTimeMicros = 0L;
@@ -64,8 +60,7 @@ float control, u;
 double time;
 
 
-volatile bool debounce = false;
-volatile long debounceTimestampMillis;
+volatile bool run = true;
 
 long rightSwitchPulses;
 
@@ -76,19 +71,11 @@ void encoderHandler();     // Người xử lý mã hóa động cơ
 void refEncoderHandler(); 
 void calibrate();
 
-void leftSwitchHandler() { 
-  leftSwitchPressed = true && debounce;
-  if (leftSwitchPressed){
-    leftPress = true;
-  }
-  debounce = false;
-  
-}
-
-void rightSwitchHandler() {
-  rightSwitchPressed = true && !debounce;
-  debounce = true;
-}
+const int numReadings = 50;  // Số lần đọc để tính trung bình
+int readings[numReadings];   // Mảng để lưu trữ các giá trị đọc
+int readIndex = 0;           // Chỉ số hiện tại của mảng
+int total = 0;               // Tổng của các giá trị đọc
+int average = 0;
 
 void calibrate() {
   long lastReading;
@@ -120,17 +107,14 @@ void setup() {
   pinMode(REF_OUT_A, INPUT_PULLUP);
   pinMode(REF_OUT_B, INPUT_PULLUP);
 
-  pinMode(SWITCH_LEFT, INPUT_PULLUP);
-  pinMode(SWITCH_RIGHT, INPUT_PULLUP);
+  pinMode(SWITCH_ON, INPUT_PULLUP);
+  pinMode(SWITCH_OFF, INPUT_PULLUP);
 
   attachInterrupt(digitalPinToInterrupt(OUTPUT_A), encoderHandler, CHANGE);
   attachInterrupt(digitalPinToInterrupt(OUTPUT_B), encoderHandler, CHANGE);
 
   attachInterrupt(digitalPinToInterrupt(REF_OUT_A), refEncoderHandler, CHANGE);
   attachInterrupt(digitalPinToInterrupt(REF_OUT_B), refEncoderHandler, CHANGE);
-
-  attachInterrupt(digitalPinToInterrupt(SWITCH_LEFT), leftSwitchHandler, RISING);
-  attachInterrupt(digitalPinToInterrupt(SWITCH_RIGHT), rightSwitchHandler, RISING);
 
   pinMode(RL_EN, OUTPUT);
   pinMode(R_PWM, OUTPUT);
@@ -141,6 +125,31 @@ void setup() {
 
   lastTimeMicros = 0L;
   state = STATE_CALIBRATE;
+
+  for (int thisReading = 0; thisReading < numReadings; thisReading++) {
+    readings[thisReading] = 0;
+  }
+}
+
+int readFilteredPotValue() {
+  // Trừ giá trị đọc cũ từ tổng
+  total = total - readings[readIndex];
+  // Đọc giá trị mới từ chiết áp
+  readings[readIndex] = analogRead(A6);
+  // Thêm giá trị mới vào tổng
+  total = total + readings[readIndex];
+  // Tiến tới vị trí đọc tiếp theo
+  readIndex = readIndex + 1;
+
+  // Nếu đã đạt tới cuối mảng, quay lại đầu mảng
+  if (readIndex >= numReadings) {
+    readIndex = 0;
+  }
+
+  // Tính giá trị trung bình
+  average = total / numReadings;
+  
+  return average;
 }
 
 float avoidStall(float u) {
@@ -180,16 +189,25 @@ float saturate(float v, float maxValue) {
   }
 }
 
+boolean start(){
+  if(!digitalRead(8)){
+    run = true;
+  }
+  if(!digitalRead(9)){
+    run = false;
+  }
+  return run;
+}
+
 boolean isControllable(float theta, float w, float x) {
-  return fabs(fabs(fmod(theta, PI2))-PI) < THETA_THRESHOLD && fabs(w) < 15.0 && fabs(x) < 0.2;
+  return fabs(fabs(fmod(theta, PI2))-PI) < THETA_THRESHOLD && fabs(w) < 15.0 && fabs(x) < 0.2 ;
 }
 boolean su_isControllable(float theta, float w, float x) {
-  return fabs(fabs(fmod(theta, PI2))-PI) > SU_THETA_THRESHOLD && fabs(w) < 7.5 && fabs(x) < 0.20;
+  return fabs(fabs(fmod(theta, PI2))-PI) > SU_THETA_THRESHOLD && fabs(w) < 7.5 && fabs(x) < 0.2 ;
 }
 
-
-float getBalancingControl(float x, float v, float theta, float w) {
-  return -(Kx * x + Kv * v + Kth * (-copysignf(PI, theta) + fmod(theta, PI2)) + Kw * w);
+float getBalancingControl(float x, float x0, float v, float theta, float w) {
+  return -(Kx*(x-x0*0.001) + Kv * v + Kth * (-copysignf(PI, theta) + fmod(theta, PI2)) + Kw * w);
 }
 
 void driveMotorWithControl(float control, float v) {
@@ -202,7 +220,7 @@ float getSwingUpControl(float x, float v, float theta, float w) {
 
   float ksu = 1.5;
   float kcw = 1.5;
-  float kvw = 0.75;
+  float kvw = 1.5;
   float kww = 2.5;
   float kem = 0.5;
   float n = 1.05;
@@ -219,15 +237,18 @@ float getPositionControl(float x, float v, float target) {
 
 void loop() {
 
+  int filteredValue = readFilteredPotValue();
 
+  // Chuyển đổi giá trị lọc thành giá trị mong muốn
+  float set_position = map(filteredValue, 0, 1023, -200, 200);
+
+  if(start()){
   now = micros();
   dt = 1.0 * (now - lastTimeMicros) / 1000000;
   x = getCartDistance(encoderValue, PPR);
   v = (x - last_x) / dt;
-
   theta = getAngle(refEncoderValue, PENDULUM_ENCODER_PPR);
   w = (theta - last_theta) / dt;
-
 
   switch (state) {
     case STATE_CALIBRATE:
@@ -247,7 +268,7 @@ void loop() {
       break;
     case STATE_BALANCE:
       if (isControllable(theta, w, x)) {
-      control = getBalancingControl(x, v, theta, w);
+      control = getBalancingControl(x, set_position, v, theta, w);
       driveMotorWithControl(control, v);
       }
       else 
@@ -263,8 +284,15 @@ void loop() {
       }
       break;
     }
-    
-    if(Serial.available()> 0){ 
+
+  last_x = x;
+  last_theta = theta;
+  lastTimeMicros = now;
+  delay(10);
+  }
+  else driveMotor(0);
+
+  if(Serial.available()> 0){ 
     
     userInput = Serial.read();               // read user input
       
@@ -274,24 +302,11 @@ void loop() {
             Serial.print(fmod(theta, PI2)*(180/PI), 2);
             Serial.print(",");
             Serial.print(x*1000);
-            Serial.print("\n");     
-            
-      } // if user input 'g' 
-  }
-     //Serial.print(millis()-time);
-      //Serial.print(",");
-      //Serial.print(x,6);
-      //Serial.print(",");
-      //Serial.print(theta, 6);
-      //Serial.print(",");
-      //Serial.print(v);
-      //Serial.print(",");
-      //Serial.print(w);
-      //Serial.print("\n");
-  last_x = x;
-  last_theta = theta;
-  lastTimeMicros = now;
-  delay(10);
+            Serial.print(",");
+            Serial.print(set_position);
+            Serial.print("\n");        
+      } 
+    }
 }
 
 

@@ -1,1 +1,1 @@
-f'- D_
+file.write('Time,Data1,Data2\n')

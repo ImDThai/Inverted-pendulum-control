@@ -4,7 +4,7 @@ int RL_EN = 10;
 int R_PWM = 5;
 int L_PWM = 6;
 int v = -250;
-float Limit_Time = 1.0;
+float Limit_Time = 0.5;
 int counter = 0;
 
 #define OUTPUT_A  2 // PE5   - Khai báo chân A encoder của motor DC
@@ -102,8 +102,6 @@ void loop() {
     else motor(0);
     
 }
-
-
 
 
 void refEncoderHandler() {

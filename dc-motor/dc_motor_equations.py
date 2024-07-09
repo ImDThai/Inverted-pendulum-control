@@ -11,9 +11,11 @@ def integrate_curve(a, b, c, u, times):
 
 if __name__ == "__main__":
     dt = 0.01
-    times = np.arange(0, 10, dt)
-    vs = integrate_curve(0.4, 0.06, -0.01, 6.0, times)
+    times = np.arange(0, 20, dt)
+    vs = integrate_curve(3.0, 3.0, 0.1, - 0.1, 12.0, times)
     pp.plot(times, vs)
+    pp.xlabel("Time (s)")
+    pp.ylabel("Veloxity")
     pp.grid(True)
     pp.show()
 
